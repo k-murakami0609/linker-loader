@@ -10,14 +10,15 @@ fn main() {
         return;
     }
     let identification = elf::ElfIdentification::new(&loader.mapped_file);
-    let mut binary: [u8; 48] = [0; 48];
-    for (i, b) in loader.mapped_file[elf::ELF64_ADDR_SIZE..48 + elf::ELF64_ADDR_SIZE]
+    let mut header_binary = [0; elf::ELF64_HEADER_SIZE];
+    for (i, b) in loader.mapped_file
+        [elf::ELF64_ADDR_SIZE..elf::ELF64_HEADER_SIZE + elf::ELF64_ADDR_SIZE]
         .iter()
         .enumerate()
     {
-        binary[i] = *b;
+        header_binary[i] = *b;
     }
-    let header = elf::ElfHeader::new(&binary);
+    let header = elf::ElfHeader::new(&header_binary);
     println!("Class   = {}", identification.class);
     println!("Data    = {}", identification.endianess);
     println!("Version = {}", identification.version);
@@ -38,5 +39,30 @@ fn main() {
         println!("S Size = {}", header.e_shentsize);
         println!("S Number = {}", header.e_shnum);
         println!("Index = {}", header.e_shstrndx);
+    }
+
+    for i in 0..header.e_shnum as usize {
+        let mut section_binary = [0; elf::ELF64_SECTION_HEADER_SIZE];
+        let offset = header.e_shoff as usize + (i * elf::ELF64_SECTION_HEADER_SIZE) as usize;
+        for (i, b) in loader.mapped_file[offset..offset + elf::ELF64_SECTION_HEADER_SIZE]
+            .iter()
+            .enumerate()
+        {
+            section_binary[i] = *b;
+        }
+        let section = elf::ElfSectionHeader::new(&section_binary);
+        println!("----------------");
+        unsafe {
+            println!("Name = {}", section.sh_name);
+            println!("Type = {}", section.sh_type);
+            println!("Flags = {}", section.sh_flags);
+            println!("Addr = {:x}", section.sh_addr);
+            println!("Offset = {:x}", section.sh_offset);
+            println!("Size = {:x}", section.sh_size);
+            println!("Link = {}", section.sh_link);
+            println!("Info = {}", section.sh_info);
+            println!("AddRalign = {}", section.sh_addralign);
+            println!("EntSize = {:x}", section.sh_entsize);
+        }
     }
 }

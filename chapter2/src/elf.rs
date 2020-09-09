@@ -76,3 +76,26 @@ impl ElfHeader {
 }
 
 pub const ELF64_ADDR_SIZE: usize = std::mem::size_of::<ElfIdentification>();
+
+#[repr(packed)]
+pub struct ElfSectionHeader {
+    pub sh_name: u32,
+    pub sh_type: u32,
+    pub sh_flags: u64,
+    pub sh_addr: u64,
+    pub sh_offset: u64,
+    pub sh_size: u64,
+    pub sh_link: u32,
+    pub sh_info: u32,
+    pub sh_addralign: u64,
+    pub sh_entsize: u64,
+}
+
+impl ElfSectionHeader {
+    pub fn new(binary: &[u8; 64]) -> ElfSectionHeader {
+        return unsafe { std::mem::transmute::<[u8; 64], ElfSectionHeader>(*binary) };
+    }
+}
+
+pub const ELF64_HEADER_SIZE: usize = std::mem::size_of::<ElfHeader>();
+pub const ELF64_SECTION_HEADER_SIZE: usize = std::mem::size_of::<ElfSectionHeader>();
