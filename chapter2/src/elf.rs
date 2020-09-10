@@ -1,4 +1,5 @@
 use memmap::Mmap;
+use std::fmt;
 use std::fs::File;
 
 // 0x7f 'E' 'L' 'F'
@@ -30,6 +31,21 @@ pub struct ElfIdentification {
     pub os_abi: u8,
     pub os_abi_version: u8,
     pub reserved: [u8; 7], // zero filled.
+}
+
+impl fmt::Display for ElfIdentification {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "---ElfIdentification---
+Class       = {}
+Data        = {}
+Version     = {}
+OS/ABI      = {}
+ABI Version = {}",
+            self.class, self.endianess, self.version, self.os_abi, self.os_abi_version
+        )
+    }
 }
 
 impl ElfIdentification {
@@ -69,6 +85,43 @@ pub struct ElfHeader {
     pub e_shstrndx: u16,
 }
 
+impl fmt::Display for ElfHeader {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        unsafe {
+            write!(
+                f,
+                "---ElfHeader---
+Type       = {}
+Machine    = {}
+Version    = {}
+Entry      = {}
+P Offset   = {}
+S Offset   = {}
+Flags      = {}
+Entry Size = {}
+P Size     = {}
+P Number   = {}
+S Size     = {}
+S Number   = {}
+Index      = {}",
+                self.e_type,
+                self.e_machine,
+                self.e_version,
+                self.e_entry,
+                self.e_phoff,
+                self.e_shoff,
+                self.e_flags,
+                self.e_ehsize,
+                self.e_phentsize,
+                self.e_phnum,
+                self.e_shentsize,
+                self.e_shnum,
+                self.e_shstrndx,
+            )
+        }
+    }
+}
+
 impl ElfHeader {
     pub fn new(binary: &[u8; 48]) -> ElfHeader {
         return unsafe { std::mem::transmute::<[u8; 48], ElfHeader>(*binary) };
@@ -89,6 +142,37 @@ pub struct ElfSectionHeader {
     pub sh_info: u32,
     pub sh_addralign: u64,
     pub sh_entsize: u64,
+}
+
+impl fmt::Display for ElfSectionHeader {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        unsafe {
+            write!(
+                f,
+                "---ElfSectionHeader---
+Name      = {}
+Type      = {}
+Flags     = {}
+Addr      = {:x}
+Offset    = {:x}
+Size      = {:x}
+Link      = {}
+Info      = {}
+AddRalign = {}
+EntSize   = {:x}",
+                self.sh_name,
+                self.sh_type,
+                self.sh_flags,
+                self.sh_addr,
+                self.sh_offset,
+                self.sh_size,
+                self.sh_link,
+                self.sh_info,
+                self.sh_addralign,
+                self.sh_entsize,
+            )
+        }
+    }
 }
 
 impl ElfSectionHeader {
