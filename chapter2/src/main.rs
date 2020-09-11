@@ -12,19 +12,19 @@ fn main() {
     let identification = elf::ElfIdentification::new(&loader.mapped_file);
     println!("{}", identification);
 
-    let header = elf::get_elf_header(&loader.mapped_file);
+    let header = loader.get_elf_header();
     println!("{}", header);
 
-    let program_headers = elf::get_program_headers(&loader.mapped_file, &header);
+    let program_headers = loader.get_program_headers();
     for program_header in program_headers.iter() {
         println!("{}", program_header);
     }
 
-    let section_headers = elf::get_section_headers(&loader.mapped_file, &header);
+    let section_headers = loader.get_section_headers();
     for section_header in section_headers.iter() {
         println!("{}", section_header);
     }
-    let names = elf::get_section_names(&loader.mapped_file, &section_headers, &header);
+    let names = loader.get_section_names();
     for name in names.iter() {
         println!("{}", name);
     }

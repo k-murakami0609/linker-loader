@@ -20,6 +20,84 @@ impl ElfLoader {
     pub fn is_elf(&self) -> bool {
         self.mapped_file[0..4] == HEADER_MAGIC
     }
+
+    pub fn get_elf_header(&self) -> ElfHeader {
+        let mut header_binary = [0; ELF64_HEADER_SIZE];
+        for (i, b) in self.mapped_file[ELF64_ADDR_SIZE..ELF64_HEADER_SIZE + ELF64_ADDR_SIZE]
+            .iter()
+            .enumerate()
+        {
+            header_binary[i] = *b;
+        }
+        ElfHeader::new(&header_binary)
+    }
+
+    pub fn get_program_headers(&self) -> Vec<ElfProgramHeader> {
+        let elf_header = self.get_elf_header();
+        let mut headers = Vec::<ElfProgramHeader>::new();
+        for i in 0..elf_header.e_phnum as usize {
+            let mut section_binary = [0; ELF64_PROGRAM_HEADER_SIZE];
+            let offset = elf_header.e_phoff as usize + (i * ELF64_PROGRAM_HEADER_SIZE) as usize;
+            for (i, b) in self.mapped_file[offset..offset + ELF64_PROGRAM_HEADER_SIZE]
+                .iter()
+                .enumerate()
+            {
+                section_binary[i] = *b;
+            }
+            let section = ElfProgramHeader::new(&section_binary);
+            headers.push(section);
+        }
+        return headers;
+    }
+
+    pub fn get_section_headers(&self) -> Vec<ElfSectionHeader> {
+        let elf_header = self.get_elf_header();
+        let mut headers = Vec::<ElfSectionHeader>::new();
+        for i in 0..elf_header.e_shnum as usize {
+            let mut section_binary = [0; ELF64_SECTION_HEADER_SIZE];
+            let offset = elf_header.e_shoff as usize + (i * ELF64_SECTION_HEADER_SIZE) as usize;
+            for (i, b) in self.mapped_file[offset..offset + ELF64_SECTION_HEADER_SIZE]
+                .iter()
+                .enumerate()
+            {
+                section_binary[i] = *b;
+            }
+            let section = ElfSectionHeader::new(&section_binary);
+            headers.push(section);
+        }
+        return headers;
+    }
+
+    pub fn get_section_names(&self) -> Vec<String> {
+        let elf_header = self.get_elf_header();
+        let section_headers = self.get_section_headers();
+
+        let header: &ElfSectionHeader =
+            section_headers.get(elf_header.e_shstrndx as usize).unwrap();
+        let mut section_binary = Vec::<u8>::new();
+        for (_, b) in self.mapped_file
+            [header.sh_offset as usize..header.sh_offset as usize + header.sh_size as usize]
+            .iter()
+            .enumerate()
+        {
+            section_binary.push(*b);
+        }
+        let mut names = Vec::<String>::new();
+        for header in section_headers.iter() {
+            // +1 ???
+            let mut index = header.sh_name as usize + 1;
+            let mut bytes = Vec::<u8>::new();
+            let mut t = section_binary[index];
+            while t != 0x00 {
+                bytes.push(t);
+                index += 1;
+                t = section_binary[index];
+            }
+            let converted = String::from_utf8(bytes.to_vec()).unwrap();
+            names.push(converted);
+        }
+        return names;
+    }
 }
 
 /// File identification in elf header.
@@ -229,81 +307,3 @@ impl ElfSectionHeader {
 pub const ELF64_HEADER_SIZE: usize = std::mem::size_of::<ElfHeader>();
 pub const ELF64_PROGRAM_HEADER_SIZE: usize = std::mem::size_of::<ElfProgramHeader>();
 pub const ELF64_SECTION_HEADER_SIZE: usize = std::mem::size_of::<ElfSectionHeader>();
-
-pub fn get_elf_header(mapped_file: &Mmap) -> ElfHeader {
-    let mut header_binary = [0; ELF64_HEADER_SIZE];
-    for (i, b) in mapped_file[ELF64_ADDR_SIZE..ELF64_HEADER_SIZE + ELF64_ADDR_SIZE]
-        .iter()
-        .enumerate()
-    {
-        header_binary[i] = *b;
-    }
-    ElfHeader::new(&header_binary)
-}
-
-pub fn get_program_headers(mapped_file: &Mmap, elf_header: &ElfHeader) -> Vec<ElfProgramHeader> {
-    let mut headers = Vec::<ElfProgramHeader>::new();
-    for i in 0..elf_header.e_phnum as usize {
-        let mut section_binary = [0; ELF64_PROGRAM_HEADER_SIZE];
-        let offset = elf_header.e_phoff as usize + (i * ELF64_PROGRAM_HEADER_SIZE) as usize;
-        for (i, b) in mapped_file[offset..offset + ELF64_PROGRAM_HEADER_SIZE]
-            .iter()
-            .enumerate()
-        {
-            section_binary[i] = *b;
-        }
-        let section = ElfProgramHeader::new(&section_binary);
-        headers.push(section);
-    }
-    return headers;
-}
-
-pub fn get_section_headers(mapped_file: &Mmap, elf_header: &ElfHeader) -> Vec<ElfSectionHeader> {
-    let mut headers = Vec::<ElfSectionHeader>::new();
-    for i in 0..elf_header.e_shnum as usize {
-        let mut section_binary = [0; ELF64_SECTION_HEADER_SIZE];
-        let offset = elf_header.e_shoff as usize + (i * ELF64_SECTION_HEADER_SIZE) as usize;
-        for (i, b) in mapped_file[offset..offset + ELF64_SECTION_HEADER_SIZE]
-            .iter()
-            .enumerate()
-        {
-            section_binary[i] = *b;
-        }
-        let section = ElfSectionHeader::new(&section_binary);
-        headers.push(section);
-    }
-    return headers;
-}
-
-pub fn get_section_names(
-    mapped_file: &Mmap,
-    section_headers: &Vec<ElfSectionHeader>,
-    elf_header: &ElfHeader,
-) -> Vec<String> {
-    let header: &ElfSectionHeader = section_headers.get(elf_header.e_shstrndx as usize).unwrap();
-    let mut section_binary = Vec::<u8>::new();
-    for (_, b) in mapped_file
-        [header.sh_offset as usize..header.sh_offset as usize + header.sh_size as usize]
-        .iter()
-        .enumerate()
-    {
-        section_binary.push(*b);
-    }
-
-    let mut names = Vec::<String>::new();
-    for header in section_headers.iter() {
-        // +1 ???
-        let mut index = header.sh_name as usize + 1;
-        let mut bytes = Vec::<u8>::new();
-        let mut t = section_binary[index];
-        while t != 0x00 {
-            bytes.push(t);
-            index += 1;
-            t = section_binary[index];
-        }
-        let converted = String::from_utf8(bytes.to_vec()).unwrap();
-        names.push(converted);
-    }
-
-    return names;
-}
