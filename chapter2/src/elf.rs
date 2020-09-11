@@ -131,6 +131,51 @@ impl ElfHeader {
 pub const ELF64_ADDR_SIZE: usize = std::mem::size_of::<ElfIdentification>();
 
 #[repr(packed)]
+pub struct ElfProgramHeader {
+    pub p_type: u32,
+    pub p_flags: u32,
+    pub p_offset: u64,
+    pub p_vaddr: u64,
+    pub p_paddr: u64,
+    pub p_filesz: u64,
+    pub p_memsz: u64,
+    pub p_align: u64,
+}
+
+impl fmt::Display for ElfProgramHeader {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        unsafe {
+            write!(
+                f,
+                "---ElfProgramHeader---
+Type      = {:x}
+Flags     = {}
+Offset    = {:x}
+V_Addr    = {:x}
+P_Addr    = {:x}
+File_Size = {:x}
+Mem       = {:x}
+Align     = {}",
+                self.p_type,
+                self.p_flags,
+                self.p_offset,
+                self.p_vaddr,
+                self.p_paddr,
+                self.p_filesz,
+                self.p_memsz,
+                self.p_align,
+            )
+        }
+    }
+}
+
+impl ElfProgramHeader {
+    pub fn new(binary: &[u8; 56]) -> ElfProgramHeader {
+        return unsafe { std::mem::transmute::<[u8; 56], ElfProgramHeader>(*binary) };
+    }
+}
+
+#[repr(packed)]
 pub struct ElfSectionHeader {
     pub sh_name: u32,
     pub sh_type: u32,
@@ -182,6 +227,7 @@ impl ElfSectionHeader {
 }
 
 pub const ELF64_HEADER_SIZE: usize = std::mem::size_of::<ElfHeader>();
+pub const ELF64_PROGRAM_HEADER_SIZE: usize = std::mem::size_of::<ElfProgramHeader>();
 pub const ELF64_SECTION_HEADER_SIZE: usize = std::mem::size_of::<ElfSectionHeader>();
 
 pub fn get_elf_header(mapped_file: &Mmap) -> ElfHeader {
@@ -193,6 +239,23 @@ pub fn get_elf_header(mapped_file: &Mmap) -> ElfHeader {
         header_binary[i] = *b;
     }
     ElfHeader::new(&header_binary)
+}
+
+pub fn get_program_headers(mapped_file: &Mmap, elf_header: &ElfHeader) -> Vec<ElfProgramHeader> {
+    let mut headers = Vec::<ElfProgramHeader>::new();
+    for i in 0..elf_header.e_phnum as usize {
+        let mut section_binary = [0; ELF64_PROGRAM_HEADER_SIZE];
+        let offset = elf_header.e_phoff as usize + (i * ELF64_PROGRAM_HEADER_SIZE) as usize;
+        for (i, b) in mapped_file[offset..offset + ELF64_PROGRAM_HEADER_SIZE]
+            .iter()
+            .enumerate()
+        {
+            section_binary[i] = *b;
+        }
+        let section = ElfProgramHeader::new(&section_binary);
+        headers.push(section);
+    }
+    return headers;
 }
 
 pub fn get_section_headers(mapped_file: &Mmap, elf_header: &ElfHeader) -> Vec<ElfSectionHeader> {

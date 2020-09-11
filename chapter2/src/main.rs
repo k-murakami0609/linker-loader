@@ -14,6 +14,12 @@ fn main() {
 
     let header = elf::get_elf_header(&loader.mapped_file);
     println!("{}", header);
+
+    let program_headers = elf::get_program_headers(&loader.mapped_file, &header);
+    for program_header in program_headers.iter() {
+        println!("{}", program_header);
+    }
+
     let section_headers = elf::get_section_headers(&loader.mapped_file, &header);
     for section_header in section_headers.iter() {
         println!("{}", section_header);
