@@ -22,6 +22,7 @@ impl ElfLoader {
     }
 
     pub fn get_elf_header(&self) -> ElfHeader {
+        // const_genericsがあれば共通化できる
         let mut header_binary = [0; ELF64_HEADER_SIZE];
         for (i, b) in self.mapped_file[ELF64_ADDR_SIZE..ELF64_HEADER_SIZE + ELF64_ADDR_SIZE]
             .iter()
@@ -36,6 +37,7 @@ impl ElfLoader {
         let elf_header = self.get_elf_header();
         let mut headers = Vec::<ElfProgramHeader>::new();
         for i in 0..elf_header.e_phnum as usize {
+            // const_genericsがあれば共通化できる
             let mut section_binary = [0; ELF64_PROGRAM_HEADER_SIZE];
             let offset = elf_header.e_phoff as usize + (i * ELF64_PROGRAM_HEADER_SIZE) as usize;
             for (i, b) in self.mapped_file[offset..offset + ELF64_PROGRAM_HEADER_SIZE]
@@ -54,6 +56,7 @@ impl ElfLoader {
         let elf_header = self.get_elf_header();
         let mut headers = Vec::<ElfSectionHeader>::new();
         for i in 0..elf_header.e_shnum as usize {
+            // const_genericsがあれば共通化できる
             let mut section_binary = [0; ELF64_SECTION_HEADER_SIZE];
             let offset = elf_header.e_shoff as usize + (i * ELF64_SECTION_HEADER_SIZE) as usize;
             for (i, b) in self.mapped_file[offset..offset + ELF64_SECTION_HEADER_SIZE]
@@ -74,29 +77,61 @@ impl ElfLoader {
 
         let header: &ElfSectionHeader =
             section_headers.get(elf_header.e_shstrndx as usize).unwrap();
-        let mut section_binary = Vec::<u8>::new();
-        for (_, b) in self.mapped_file
-            [header.sh_offset as usize..header.sh_offset as usize + header.sh_size as usize]
-            .iter()
-            .enumerate()
-        {
-            section_binary.push(*b);
-        }
+        let binary = self.get_binary_by_section_header(header);
         let mut names = Vec::<String>::new();
         for header in section_headers.iter() {
             // +1 ???
             let mut index = header.sh_name as usize + 1;
             let mut bytes = Vec::<u8>::new();
-            let mut t = section_binary[index];
+            let mut t = binary[index];
             while t != 0x00 {
                 bytes.push(t);
                 index += 1;
-                t = section_binary[index];
+                t = binary[index];
             }
             let converted = String::from_utf8(bytes.to_vec()).unwrap();
             names.push(converted);
         }
         return names;
+    }
+
+    pub fn get_symbol_table(&self) -> Vec<ElfSymbolEntry> {
+        let section_headers = self.get_section_headers();
+        if let Some(header) = section_headers
+            .iter()
+            .find(|header| header.sh_type == SectionType::ShtSymtab as u32)
+        {
+            let size = header.sh_size / header.sh_entsize;
+            let mut symbol_table = Vec::<ElfSymbolEntry>::new();
+            for i in 0..size {
+                let mut section_binary = [0; ELF64_SYMBOL_ENTRY_SIZE];
+                let offset =
+                    header.sh_offset as usize + (i as usize * ELF64_SYMBOL_ENTRY_SIZE) as usize;
+                for (i, b) in self.mapped_file[offset..offset + ELF64_SYMBOL_ENTRY_SIZE]
+                    .iter()
+                    .enumerate()
+                {
+                    section_binary[i] = *b;
+                }
+                let entry = ElfSymbolEntry::new(&section_binary);
+                symbol_table.push(entry);
+            }
+            return symbol_table;
+        } else {
+            panic!("not found");
+        }
+    }
+
+    fn get_binary_by_section_header(&self, header: &ElfSectionHeader) -> Vec<u8> {
+        let mut binary = Vec::<u8>::new();
+        for (_, b) in self.mapped_file
+            [header.sh_offset as usize..header.sh_offset as usize + header.sh_size as usize]
+            .iter()
+            .enumerate()
+        {
+            binary.push(*b);
+        }
+        return binary;
     }
 }
 
@@ -304,6 +339,50 @@ impl ElfSectionHeader {
     }
 }
 
+#[repr(packed)]
+pub struct ElfSymbolEntry {
+    pub st_name: u32,
+    pub st_info: u8,
+    pub st_other: u8,
+    pub st_shndx: u16,
+    pub st_value: u64,
+    pub st_size: u64,
+}
+
+impl ElfSymbolEntry {
+    pub fn new(binary: &[u8; 24]) -> ElfSymbolEntry {
+        return unsafe { std::mem::transmute::<[u8; 24], ElfSymbolEntry>(*binary) };
+    }
+}
+
+impl fmt::Display for ElfSymbolEntry {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        unsafe {
+            write!(
+                f,
+                "---ElfSymbolEntry---
+Name      = {}
+Info      = {}
+Other     = {}
+Ndx       = {}
+Value     = {:x}
+Size      = {}",
+                self.st_name,
+                self.st_info,
+                self.st_other,
+                self.st_shndx,
+                self.st_value,
+                self.st_size,
+            )
+        }
+    }
+}
+
 pub const ELF64_HEADER_SIZE: usize = std::mem::size_of::<ElfHeader>();
 pub const ELF64_PROGRAM_HEADER_SIZE: usize = std::mem::size_of::<ElfProgramHeader>();
 pub const ELF64_SECTION_HEADER_SIZE: usize = std::mem::size_of::<ElfSectionHeader>();
+pub const ELF64_SYMBOL_ENTRY_SIZE: usize = std::mem::size_of::<ElfSymbolEntry>();
+
+enum SectionType {
+    ShtSymtab = 2,
+}

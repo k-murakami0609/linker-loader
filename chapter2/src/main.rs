@@ -28,4 +28,9 @@ fn main() {
     for name in names.iter() {
         println!("{}", name);
     }
+
+    let table = loader.get_symbol_table();
+    for entry in table.iter() {
+        println!("{}", entry);
+    }
 }
