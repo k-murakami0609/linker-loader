@@ -104,6 +104,7 @@ impl ElfLoader {
             let size = header.sh_size / header.sh_entsize;
             let mut symbol_table = Vec::<ElfSymbolEntry>::new();
             for i in 0..size {
+                // const_genericsがあれば共通化できる
                 let mut section_binary = [0; ELF64_SYMBOL_ENTRY_SIZE];
                 let offset =
                     header.sh_offset as usize + (i as usize * ELF64_SYMBOL_ENTRY_SIZE) as usize;
